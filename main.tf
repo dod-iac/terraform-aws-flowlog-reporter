@@ -8,7 +8,7 @@
  *
  * ## Usage
  *
- * Couple with a report receiver deployed in another account. Will need one of these per vpc and/or cloudwatch log group 
+ * Couple with a report receiver deployed in another account. Will need one of these per vpc and/or cloudwatch log group
  *
  * Resources:
  *
