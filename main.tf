@@ -1,44 +1,36 @@
 /**
  * # Terraform Module template
  *
- * This repository is meant to be a template for creating new terraform modules.
- *
- * ## Creating a new Terraform Module
- *
- * 1. Clone this repo, renaming appropriately.
- * 1. Write your terraform code in the root dir.
- * 1. Ensure you've completed the [Developer Setup](#developer-setup).
- * 1. In the root dir, modify the `module` line for the repo path. Then run `make tidy`, which updates the `go.sum` file and downloads dependencies.
- * 1. Update the terratest tests in the examples and test directories.
- * 1. Run your terratest tests to ensure they work as expected using instructions below.
- *
- * ---
- *
- * <!-- DELETE ABOVE THIS LINE -->
  *
  * ## Description
  *
- * Please put a description of what this module does here
+ * This module is used to report an exsiting flowlog stream in cloudwatch to a central kinesis stream in another account
  *
  * ## Usage
  *
- * Add Usage information here
+ * Couple with a report receiver deployed in another account. Will need one of these per vpc and/or cloudwatch log group
  *
  * Resources:
  *
  * * [Article Example](https://article.example.com)
  *
  * ```hcl
- * module "example" {
- *   source = "dod-iac/example/aws"
- *
- *   tags = {
- *     Project     = var.project
- *     Application = var.application
- *     Environment = var.environment
- *     Automation  = "Terraform"
- *   }
- * }
+    module "flowlog_stream" {
+    source                = "../../modules/kinesiss-stream-config"
+    source_account        = data.aws_caller_identity.current.id
+    security_group_ids    = [module.elmo.es_ingress_sg]
+    subnet_ids            = module.elmo.private_subnet_ids
+    opensearch_domain_arn = module.elmo.es_domain
+    error_logging_bucket  = module.elmo.logging_bucket
+    stream_type           = "flowlog"
+    }
+    module "vpclogs" {
+  source             = "../../modules/vpc-flowlog-subscription"
+  role_arn           = module.flowlog_stream.publish_role_arn
+  kinesis_stream_arn = module.flowlog_stream.destination_arn
+  cloudwatch_name    = module.elmo.vpc_cloudwatch_name
+
+}
  * ```
  *
  * ## Testing
@@ -71,7 +63,11 @@
  *
  */
 
-data "aws_caller_identity" "current" {}
-data "aws_iam_account_alias" "current" {}
-data "aws_partition" "current" {}
-data "aws_region" "current" {}
+resource "aws_cloudwatch_log_subscription_filter" "test_lambdafunction_logfilter" {
+  name            = format("%s-vpc-flowlog-subscription", local.name_prefix)
+  role_arn        = var.role_arn
+  log_group_name  = var.cloudwatch_name
+  filter_pattern  = "ACCEPT"
+  destination_arn = var.kinesis_stream_arn
+  distribution    = "Random"
+}
